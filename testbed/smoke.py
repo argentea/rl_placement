@@ -14,13 +14,15 @@ tries, one at a time, the calls the testbed will be built on:
     python3 testbed/smoke.py --card 3
 
 Standard library only, Python 3.8+. Takes a few minutes and uses one card. Prints one line per
-step as it goes and writes testbed/out/smoke.json and testbed/out/smoke-server.log. A step that
-fails is recorded and the later steps still run. These are checks of what the calls do, on a
+step when the step ends, and a "still on" line every 20 seconds while a step is running, with
+the last line of the server log. Writes testbed/out/smoke.json and testbed/out/smoke-server.log.
+A step that fails is recorded and the later steps still run. These are checks of what the calls do, on a
 small model; they are not measurements for the simulator.
 """
 import argparse
 import json
 import os
+import re
 import secrets
 import signal
 import socket
@@ -93,12 +95,31 @@ def good(r):
     return r["status"] == 200 and not (isinstance(r["json"], dict) and r["json"].get("success") is False)
 
 
+def last_log_line():
+    try:
+        with open(LOG, errors="replace") as f:
+            lines = [ln.strip() for ln in f.readlines()[-20:] if ln.strip()]
+        return lines[-1][:150] if lines else ""
+    except OSError:
+        return ""
+
+
 def step(name, fn):
-    t = time.time()
+    t, done = time.time(), threading.Event()
+
+    def nag():
+        while not done.wait(20):
+            line = last_log_line()
+            print("   ... still on '%s', %d s%s" % (name, time.time() - t, "; server log: " + line if line else ""),
+                  flush=True)
+
+    threading.Thread(target=nag, daemon=True).start()
     try:
         ok, note, detail = fn()
     except Exception as e:
         ok, note, detail = False, "%s: %s" % (type(e).__name__, str(e)[:300]), None
+    finally:
+        done.set()
     rec = {"step": name, "ok": bool(ok), "s": round(time.time() - t, 2), "note": note, "detail": detail}
     STEPS.append(rec)
     print("%-26s %-6s %7.2f s  %s" % (name, "ok" if ok else "FAILED", rec["s"], note), flush=True)
@@ -131,8 +152,9 @@ def download(model_id):
     last = ""
     for name, imp, env in tries:
         code = "%s\nprint('PATH=' + snapshot_download(%r))" % (imp, model_id)
-        p = subprocess.run([sys.executable, "-c", code], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                           universal_newlines=True, timeout=3600, env=dict(os.environ, **env))
+        # stderr is left alone so the downloader's progress bars reach the terminal
+        p = subprocess.run([sys.executable, "-c", code], stdout=subprocess.PIPE,
+                           universal_newlines=True, timeout=7200, env=dict(os.environ, **env))
         for ln in p.stdout.splitlines():
             if ln.startswith("PATH="):
                 return ln[5:], name
@@ -161,16 +183,34 @@ def stop(proc):
             pass
 
 
-def start(args, path):
-    """Try the launch command in up to three forms. Returns (process, form used)."""
+def server_flags():
+    """The flags the installed server accepts, from its own --help. Empty if that cannot be read."""
+    try:
+        p = subprocess.run([sys.executable, "-m", "sglang.launch_server", "--help"], stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, universal_newlines=True, timeout=300)
+    except (OSError, subprocess.TimeoutExpired):
+        return set()
+    return set(re.findall(r"(?<![\w-])(--[a-z0-9][a-z0-9-]+)", p.stdout)) if p.returncode == 0 else set()
+
+
+def start(args, path, flags):
+    """Launch the server. Returns (process, form used, why earlier forms failed)."""
     port = free_port()
     S["base"], S["key"] = "http://127.0.0.1:%d" % port, secrets.token_hex(8)
+    base = [sys.executable, "-m", "sglang.launch_server", "--model-path", path, "--host", "127.0.0.1",
+            "--port", str(port)] + args.server_arg
+    key = ["--admin-api-key", S["key"]]
     if args.server_cmd:
         forms = [("given command", args.server_cmd.format(model=path, port=port, key=S["key"]).split())]
-    else:
-        base = [sys.executable, "-m", "sglang.launch_server", "--model-path", path, "--host", "127.0.0.1",
-                "--port", str(port), "--log-level", "info"] + args.server_arg
-        key = ["--admin-api-key", S["key"]]
+    elif flags:                  # known flags: build one command, with one fallback
+        if "--log-level" in flags:
+            base += ["--log-level", "info"]
+        if "--admin-api-key" in flags:
+            base += key
+        forms = [("with memory saver", base + ["--enable-memory-saver"])] if "--enable-memory-saver" in flags else []
+        forms.append(("without memory saver", base))
+    else:                        # unknown flags: find out by trying
+        base += ["--log-level", "info"]
         forms = [("with memory saver", base + key + ["--enable-memory-saver"]),
                  ("without memory saver", base + key),
                  ("admin key from the environment only", base)]
@@ -197,7 +237,7 @@ def start(args, path):
 
 # ----------------------------------------------------------------------------- the calls under test
 
-def generate(text, n, timeout=900):
+def generate(text, n, timeout=300):
     r = call("POST", "/generate", {"text": text, "sampling_params": {
         "max_new_tokens": n, "ignore_eos": True, "temperature": 0.0}}, timeout=timeout)
     js = r["json"][0] if isinstance(r["json"], list) and r["json"] else r["json"]
@@ -266,11 +306,11 @@ def t_sync(mode, path, n):
     if mode != "none":
         seq.append(("pause", call("POST", "/pause_generation", {"mode": mode}, admin=True)))
     body = {"model_path": path, "weight_version": "smoke-" + mode, "flush_cache": mode != "in_place"}
-    up = call("POST", "/update_weights_from_disk", body, admin=True, timeout=900)
+    up = call("POST", "/update_weights_from_disk", body, admin=True, timeout=300)
     if up["status"] == 400:      # some builds want the update inside a session
         seq.append(("update outside a session", up))
         seq.append(("begin", call("POST", "/begin_weight_update", {"selector": "all"}, admin=True)))
-        up = call("POST", "/update_weights_from_disk", body, admin=True, timeout=900)
+        up = call("POST", "/update_weights_from_disk", body, admin=True, timeout=300)
         seq.append(("update", up))
         seq.append(("end", call("POST", "/end_weight_update", {}, admin=True)))
     else:
@@ -278,7 +318,7 @@ def t_sync(mode, path, n):
     up_end = time.time()
     if mode != "none":
         seq.append(("continue", call("POST", "/continue_generation", {}, admin=True)))
-    th.join(900)
+    th.join(320)
     if th.is_alive():            # do not leave the server paused for the next step
         seq.append(("continue again", call("POST", "/continue_generation", {}, admin=True)))
         th.join(120)
@@ -327,12 +367,15 @@ def main():
     ap.add_argument("--model-path", help="a model folder already on disk; skips the download")
     ap.add_argument("--card", type=int, default=0)
     ap.add_argument("--long-tokens", type=int, default=3000, help="length of the request that a weight sync interrupts")
-    ap.add_argument("--start-timeout", type=int, default=900)
+    ap.add_argument("--start-timeout", type=int, default=600, help="seconds to wait for each launch form")
     ap.add_argument("--server-arg", action="append", default=[], help="extra argument for the server; repeatable")
     ap.add_argument("--server-cmd", help="replace the launch command; {model}, {port} and {key} are filled in")
     args = ap.parse_args()
     os.makedirs(OUTDIR, exist_ok=True)
+    if os.path.exists(LOG) and os.path.getsize(LOG):
+        os.replace(LOG, LOG + ".prev")      # keep the previous run's log
     open(LOG, "w").close()
+    print("server log: %s (watch it with tail -f)" % os.path.relpath(LOG), flush=True)
     box = {}
 
     def do_model():
@@ -342,9 +385,20 @@ def main():
         box["path"], src = download(args.model)
         return True, "%s from %s" % (args.model, src), None
 
+    def do_flags():
+        box["flags"] = set() if args.server_cmd else server_flags()
+        want = ["--admin-api-key", "--enable-memory-saver", "--log-level", "--mem-fraction-static",
+                "--max-running-requests", "--max-total-tokens", "--chunked-prefill-size", "--schedule-policy",
+                "--disable-radix-cache", "--disable-cuda-graph", "--skip-server-warmup", "--enable-lora",
+                "--weight-version", "--enable-prefill-weight-versions", "--enable-deterministic-inference",
+                "--tp-size", "--dp-size", "--dtype", "--base-gpu-id"]
+        have = [f for f in want if f in box["flags"]]
+        return bool(box["flags"]) or bool(args.server_cmd), "%d flags; has: %s; lacks: %s" % (
+            len(box["flags"]), " ".join(have) or "-", " ".join(f for f in want if f not in have) or "-"), None
+
     def do_start():
         before = card_mib(args.card)
-        box["proc"], form, why = start(args, box["path"])
+        box["proc"], form, why = start(args, box["path"], box.get("flags"))
         return True, "%s; card memory %s -> %s MiB%s" % (form, before, card_mib(args.card),
                                                          "; earlier tries: " + "; ".join(why) if why else ""), {"form": form, "failed": why}
 
@@ -354,6 +408,7 @@ def main():
         return box["proc"].poll() is not None, "card memory now %s MiB" % card_mib(args.card), None
 
     try:
+        step("server flags", do_flags)
         if not step("model", do_model)["ok"] or not step("start server", do_start)["ok"]:
             print("\nlast lines of the server log:\n" + log_tail())
             return 1
@@ -379,7 +434,8 @@ def main():
             step("stop server", do_stop)
         bad = [s["step"] for s in STEPS if not s["ok"]]
         out = {"smoke_version": 1, "time_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-               "model": args.model_path or args.model, "card": args.card, "steps": STEPS, "failed": bad}
+               "model": args.model_path or args.model, "card": args.card, "steps": STEPS, "failed": bad,
+               "server_flags": sorted(box.get("flags") or [])}
         if bad:
             out["server_log_tail"] = log_tail(80)
         with open(os.path.join(OUTDIR, "smoke.json"), "w") as f:

@@ -23,14 +23,14 @@ The real system is established in stages:
 
 | Stage | What runs on the cards | What it checks in the twin | State |
 |---|---|---|---|
-| 0. Machine | `testbed/probe.py` | Card memory and count; whether the card numbers in `CARDS` are plausible | First run back; CPU allowance and engine details still open |
-| 1. Components | One serving replica under load, one training step, start and stop, a weight push (E1 to E6) | Each law on its own | `testbed/smoke.py` written as first contact with the engine; not yet run |
+| 0. Machine | `testbed/probe.py` | Card memory and count; whether the card numbers in `CARDS` are plausible | Done, two runs |
+| 1. Components | One serving replica under load, one training step, start and stop, a weight push (E1 to E6) | Each law on its own | `testbed/smoke.py` is first contact with the engine. The user's first run printed nothing for a long time; cause unknown, the server log is needed. The script now reports progress |
 | 2. Closed loop | An orchestrator running the deploy policies end to end, with a synthetic environment drawn from the twin's workload sampler (E8) | How the laws compose: time per update, lag, where the card-time goes | Not started |
 | 3. Real task | A task with a reward (E9) | The value of lag. Only if lag turns out to matter | Not started |
 
 ## The machine, measured 2026-11-27
 
-Raw output in `testbed/results/2026-11-27-probe.txt`. The user first said 8 x H800; the cards are 8 x H200, which the driver reports as "NVIDIA L20X".
+Raw output in `testbed/results/2026-11-27-probe.txt` and `2026-11-27-probe-v2.txt`. The user first said 8 x H800; the cards are 8 x H200, which the driver reports as "NVIDIA L20X".
 
 | Measured | Value | What the twin assumes | Reading |
 |---|---|---|---|
@@ -43,7 +43,7 @@ Raw output in `testbed/results/2026-11-27-probe.txt`. The user first said 8 x H8
 Other facts:
 
 - A container, running as root. 800 GiB RAM, 404 GiB of `/dev/shm`, 795 GiB of local disk that probably does not survive a restart. The repo sits on NFS, which does.
-- CPU allowance unresolved: the system count says 2, the affinity mask says 192. If a quota of 2 cores is in force, eight card processes will be held back by it. Probe version 2 reads the quota and measures the speed-up of parallel processes.
+- CPU is not a limit: the quota is about 102 cores, and 32 busy processes ran 32 times the work of one. But `os.cpu_count()` returns 2 there, so anything that sizes its threads or workers from it will use two. The testbed must set thread and worker counts itself.
 - Installed: torch 2.13.0 (CUDA 13.0), SGLang 0.5.19 development build, transformers, peft, accelerate, deepspeed. No vLLM.
 - ModelScope and hf-mirror answer; huggingface.co does not. No models on disk.
 
@@ -64,6 +64,12 @@ From the SGLang documentation (the "SGLang for RL" and native API pages, read 20
 | Weight transport | From disk, from tensors in memory, or over a process group between cards | Three paths with different costs. The twin has one rate, `intra_gbs` |
 
 Not documented, and so for the smoke test to find out: what a weight update does to a running request when nothing pauses it first.
+
+Checked against the installed build's source by probe version 2:
+
+- Every call above is present, with request fields that match the documentation. The session calls `begin_weight_update` and `end_weight_update` are absent.
+- There is a fourth weight path the documentation did not show, `UpdateWeightsFromIPCReqInput`, which takes handles and no data. Adapters can also be loaded from tensors.
+- The launch flags could not be read from source, because the server's main flags are not written there as literals. `smoke.py` reads them from the server's `--help`.
 
 ## What the aim requires, and where the simulator stands
 
@@ -102,8 +108,8 @@ In scenario A, plain time-sharing and the stale-cache split spend about the same
 
 On the cards:
 
-1. **User runs `python3 testbed/probe.py` and `python3 testbed/smoke.py`** and pastes both outputs. The probe now settles the CPU allowance and lists the engine's calls and launch flags from its source. The smoke test starts SGLang on one card with a 0.5B model and tries generation, weight sync under each way of treating a running request, and memory release. Both are tested here against stand-ins only: no card, no engine on this machine.
-2. **Choose the model.** Proposal: a Qwen model of 7 to 8B from ModelScope for measurements, the 0.5B one for checking scripts.
+1. **User runs `python3 testbed/smoke.py`** and pastes the output, and the server log if a step stalls. It starts SGLang on one card with a 0.5B model and tries generation, weight sync under each way of treating a running request, and memory release. Tested here against stand-ins only: no card, no engine on this machine.
+2. **Choose the models.** Proposal: 8B as the main model, where every split of the eight cards is feasible; 32B as the scaling check, with factors fitted at 8B and the twin asked to predict 32B; 72B only with adapters. The 0.5B model is for checking scripts.
 3. **Stage 1 scripts**, then stage 2. Each script runs unattended, prints what matters, and writes one file.
 
 Here, in parallel, needing no cards:
@@ -114,7 +120,7 @@ Here, in parallel, needing no cards:
 
 ## Open decisions for the user
 
-- The model for measurements (see proposal above), and whether training is a full fine-tune or adapters.
+- The models for measurements (see proposal above), and whether training is a full fine-tune or adapters. The user asked for something larger and more capable than 0.5B on 2026-11-27.
 - The real workload: prompt, turn, generation and latency distributions, batch size. Scenarios use invented agentic and reasoning workloads.
 - Whether training on episodes generated partly under older weights (stale KV cache) is acceptable to the algorithm.
 

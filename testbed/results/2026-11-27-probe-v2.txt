@@ -1,0 +1,52 @@
+# Output of `python3 testbed/probe.py` (probe version 2, no --bench), as pasted by the user on 2026-11-27.
+# The "flags" line is incomplete: the server's main flags are not written as literals in the source,
+# so --admin-api-key, --enable-memory-saver, --mem-fraction-static and others do not show even if they exist.
+# smoke.py now reads the flag list from the server's own --help.
+
+cards      : 8 x NVIDIA L20X, 140 GiB
+in use     : 0 of 8 cards hold more than 1 GiB
+driver     : 550.127.08, CUDA up to 13.0
+nvlink     : link speeds 26.562 GB/s
+host       : 800.0 GiB RAM (798.1 available), 2 NUMA nodes, INTEL(R) XEON(R) PLATINUM 8558
+cpu        : os count 2, affinity 192, /proc/cpuinfo 192, quota 101.76 cpus (cgroup v1)
+cpu speed  : 1 processes x1.0, 8 processes x8.0, 32 processes x32.4
+disk repo  :     414 GiB free of 1048576, nfs, /ossfs/workspace/rl_placement/testbed
+disk home  :     795 GiB free of     800, overlay, ~
+disk tmp   :     795 GiB free of     800, overlay, /tmp
+disk shm   :     404 GiB free of     404, tmpfs, /dev/shm
+disk hfhub :     795 GiB free of     800, overlay, ~/.cache
+setting    : container, root, tools: cmake gcc git hf huggingface-cli modelscope numactl nvcc pip pip3 screen tmux
+python     : 3.12.3, pip 25.2
+packages   : torch 2.13.0, transformers 5.12.1, tokenizers 0.22.2, peft 0.22.0, accelerate 1.10.1, datasets 5.2.0, safetensors 0.7.0, huggingface-hub 1.33.0, modelscope 1.40.3, deepspeed 0.19.1, bitsandbytes 0.50.2, flash-attn 2.8.4, triton 3.7.1, sglang 0.5.19.dev126+g7923008cb, openai 2.6.1, aiohttp 3.14.5, httpx 0.28.1, fastapi 0.165.0, uvicorn 0.54.0, numpy 1.26.4, nvidia-ml-py 12.575.51, pynvml 12.0.0, torch-memory-saver 0.0.10, requests 2.34.2, pyzmq 27.0.1, uvloop 0.23.0, orjson 3.13.0
+torch      : {"version": "2.13.0+cu130", "cuda_build": "13.0", "cuda_available": true, "device_count": 8, "cudnn": 92000, "nccl": "2.29.7"}
+engine     : sglang, 2840 files, 108 routes, 604 flags
+  present  : /generate /v1/completions /health /health_generate /get_model_info /server_info /flush_cache /pause_generation /continue_generation /update_weights_from_disk /update_weights_from_tensor /update_weights_from_distributed /init_weights_update_group /update_weight_version /release_memory_occupation /resume_memory_occupation /load_lora_adapter /unload_lora_adapter /abort_request
+  missing  : /begin_weight_update /end_weight_update
+  ContinueGenerationReqInput(torch_empty_cache: bool = True)
+  FlushCacheReqInput(timeout_s: Optional[float] = None)
+  FlushCacheReqOutput(success: bool; message: str = "")
+  LoRAAdapter()
+  LoadLoRAAdapterFromTensorsReqInput(lora_name: str; config_dict: Dict[str, Any]; serialized_named_tensors: Annotated[List[bytes], Base64Bytes()]; pinned: bool = False; added_tokens_config: Optional[Dict[str, int]] = None; lora_id: Optional[str] = None; load_format: Optional[str] = None; expected_checksums: Optional[Dict[str, str]] = None)
+  LoadLoRAAdapterReqInput(lora_name: str; lora_path: str; pinned: bool = False; lora_id: Optional[str] = None)
+  PauseGenerationReqInput(mode: Literal["abort", "retract", "in_place"] = "abort")
+  ReleaseMemoryOccupationReqInput(tags: Optional[List[str]] = None)
+  ReleaseMemoryOccupationReqOutput()
+  ResumeMemoryOccupationReqInput(tags: Optional[List[str]] = None)
+  ResumeMemoryOccupationReqOutput()
+  SchedulerWeightUpdaterManager(tp_worker: Any; draft_worker: Any; tp_cpu_group: Any; memory_saver_adapter: Any; flush_cache: Callable[..., bool]; is_fully_idle: Callable[..., bool]; scheduler: Optional[Any] = None; metrics_collector: Optional[Any] = None; offload_tags: set = field(default_factory=set); stashed_model_static_state: Any = None)
+  UnloadLoRAAdapterReqInput(lora_name: str; lora_id: Optional[str] = None)
+  UpdateWeightFromDiskReqInput(model_path: str; load_format: Optional[str] = None; abort_all_requests: bool = False; weight_version: Optional[str] = None; is_async: bool = False; torch_empty_cache: bool = False; keep_pause: bool = False; recapture_cuda_graph: bool = False; token_step: int = 0; flush_cache: bool = True; manifest: Optional[Dict[str, Any]] = None)
+  UpdateWeightFromDiskReqOutput(success: bool; message: str; num_paused_requests: int = 0)
+  UpdateWeightFromTensorCheckerReqInput(target_module: str; expected_named_tensors_sha256: dict[str, str])
+  UpdateWeightFromTensorReqInput(serialized_named_tensors: list[str | bytes]; payload_gpu_uuids: list[str] | None = None; load_format: str | None = None; target_modules: list[str] | None = None; weight_update_mode: str | None = None; lora_alpha: int | None = None; lora_rank: int | None = None)
+  UpdateWeightVersionReqInput(new_version: str; abort_all_requests: bool = True)
+  UpdateWeightsFromDistributedReqInput(names: List[str]; dtypes: List[str]; shapes: List[List[int]]; group_name: str = "weight_update_group"; flush_cache: bool = True; abort_all_requests: bool = False; weight_version: Optional[str] = None; load_format: Optional[str] = None; torch_empty_cache: bool = False)
+  UpdateWeightsFromDistributedReqOutput(success: bool; message: str)
+  UpdateWeightsFromIPCReqInput(zmq_handles: Dict[str, str]; flush_cache: bool = True; weight_version: Optional[str] = None; torch_empty_cache: bool = False)
+  UpdateWeightsFromIPCReqOutput(success: bool; message: str)
+  UpdateWeightsFromTensorReqInput(serialized_named_tensors: Annotated[List[bytes], Base64Bytes()]; load_format: Optional[str] = None; flush_cache: bool = True; abort_all_requests: bool = False; weight_version: Optional[str] = None; disable_draft_model: Optional[bool] = None; torch_empty_cache: bool = False)
+  UpdateWeightsFromTensorReqOutput(success: bool; message: str)
+  WeightUpdater(tp_rank: int; device: str; gpu_id: int; model_config: ModelConfig; custom_weight_loaders: dict; get_model: Callable[[], Any]; update_model_fields: Callable[..., None]; recapture_cuda_graph: Callable[[], None]; get_model_runner: Callable[[], ModelRunner]; _model_update_group: dict = field(default_factory=dict))
+reachable  : hf-mirror.com, modelscope.cn, pypi.org, download.pytorch.org, github.com
+unreachable: huggingface.co, pypi mirror (tuna)
+models     : none found

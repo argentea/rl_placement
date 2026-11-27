@@ -34,6 +34,7 @@ Needs Python 3 with numpy. `run_many` and `evaluate` use a process pool, so call
 - This machine has no GPU. Nothing here can be measured locally.
 - No real RL system exists to check the twin against. It is built in this repo under `testbed/`.
 - The user has 8 x H200 for verification. The driver reports them as "NVIDIA L20X"; the user first called them H800. I write the code here; the user pulls it there, runs it, and pastes the printed output back. Each testbed script must therefore run unattended, fail loudly, and print everything that matters, since the output file may not come back.
+- On that machine `os.cpu_count()` returns 2 although about 100 cores are usable. Set thread and worker counts explicitly in testbed code.
 - That machine has SGLang and torch installed and no vLLM. Use what is installed; do not install an engine that would replace its torch. It reaches ModelScope and hf-mirror, not huggingface.co.
 - Code under `testbed/` that touches a card cannot be tested here. Say which paths were tested and which were not.
 - Keep every factor overridable through `factors.json`; do not hard-code measured values in `rlsim.py`.
