@@ -191,6 +191,57 @@ def host():
     return out
 
 
+SPIN = """import sys, time
+t0 = float(sys.argv[1])
+time.sleep(max(0.0, t0 - time.time()))
+n, end = 0, t0 + 0.5
+while time.time() < end:
+    n += 1
+print(n)"""
+
+
+def cpu():
+    """How many CPUs this process may really use. The counts disagree inside containers, so
+    this also measures it: k busy processes for half a second, total work relative to one."""
+    out = {"os_cpu_count": os.cpu_count()}
+    try:
+        out["affinity"] = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        pass
+    try:
+        with open("/proc/cpuinfo") as f:
+            out["cpuinfo_processors"] = sum(1 for ln in f if ln.startswith("processor"))
+    except OSError:
+        pass
+    out["quota_cpus"], out["quota_source"] = None, "unreadable"
+    try:
+        with open("/sys/fs/cgroup/cpu.max") as f:
+            q, per = f.read().split()
+        out["quota_cpus"], out["quota_source"] = (None if q == "max" else round(int(q) / int(per), 2)), "cgroup v2"
+    except (OSError, ValueError):
+        try:
+            with open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us") as f:
+                q = int(f.read())
+            with open("/sys/fs/cgroup/cpu/cpu.cfs_period_us") as f:
+                per = int(f.read())
+            out["quota_cpus"], out["quota_source"] = (None if q <= 0 else round(q / per, 2)), "cgroup v1"
+        except (OSError, ValueError):
+            pass
+    speed, base = {}, None
+    try:
+        for k in (1, 8, 32):
+            t0 = time.time() + 1.0 + 0.03 * k
+            ps = [subprocess.Popen([sys.executable, "-c", SPIN, repr(t0)], stdout=subprocess.PIPE,
+                                   universal_newlines=True) for _ in range(k)]
+            total = sum(int(p.communicate()[0].strip() or 0) for p in ps)
+            base = base or total
+            speed[str(k)] = round(total / base, 1) if base else None
+    except (OSError, ValueError) as e:
+        speed["error"] = type(e).__name__
+    out["speedup_by_processes"] = speed
+    return out
+
+
 ENV_NAMES = ["http_proxy", "https_proxy", "all_proxy", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
              "HF_ENDPOINT", "HF_HOME", "HF_HUB_CACHE", "HF_TOKEN", "MODELSCOPE_CACHE", "PIP_INDEX_URL",
              "CONDA_PREFIX", "VIRTUAL_ENV", "SLURM_JOB_ID", "KUBERNETES_SERVICE_HOST", "LD_LIBRARY_PATH", "CUDA_HOME"]
@@ -208,8 +259,9 @@ def environment():
             cg = f.read()
     except OSError:
         pass
+    # An overlay root is the surest sign: /.dockerenv and cgroup names are often absent.
     out["container"] = os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv") or \
-        any(k in cg for k in ("docker", "kubepods", "containerd", "lxc"))
+        any(k in cg for k in ("docker", "kubepods", "containerd", "lxc")) or fstype("/") == "overlay"
     out["tools"] = sorted(t for t in TOOLS if shutil.which(t))
     out["env_set"] = sorted(k for k in ENV_NAMES if os.environ.get(k))       # names only, never values
     out["env"] = {k: os.environ[k] for k in ENV_VALUES if k in os.environ}
@@ -230,7 +282,8 @@ def environment():
 PKGS = ["torch", "vllm", "transformers", "tokenizers", "peft", "accelerate", "datasets", "safetensors",
         "huggingface-hub", "modelscope", "trl", "deepspeed", "bitsandbytes", "flash-attn", "xformers", "triton",
         "sglang", "openai", "aiohttp", "httpx", "fastapi", "uvicorn", "ray", "numpy", "nvidia-ml-py", "pynvml",
-        "nvidia-cudnn-cu12", "nvidia-nccl-cu12", "mpi4py"]
+        "nvidia-cudnn-cu12", "nvidia-nccl-cu12", "mpi4py", "torch-memory-saver", "sglang-router", "requests",
+        "pyzmq", "uvloop", "orjson"]
 
 TORCH_SNIPPET = r"""
 import json, torch
@@ -273,6 +326,81 @@ def python_info():
         out["torch"] = json.loads(line[5:]) if line else {"error": (se or so or "no output")[-300:]}
     rc, so, _ = sh([sys.executable, "-m", "pip", "--version"])
     out["pip"] = so.split(" from ")[0] if rc == 0 else None
+    return out
+
+
+# ----------------------------------------------------------------------------- inference engine
+
+ROUTE_RE = re.compile(r"@\s*\w+\.(get|post|put|delete|api_route)\(\s*[\"']([^\"']+)[\"']")
+FLAG_RE = re.compile(r"[\"'](--[a-z0-9][a-z0-9-]*)[\"']")
+CLASS_RE = re.compile(r"UpdateWeight|WeightUpdate|WeightVersion|ReleaseMemory|ResumeMemory|PauseGeneration|"
+                      r"ContinueGeneration|LoRAAdapter|LoraAdapter|FlushCache")
+# Calls the testbed wants: generation, health, weight sync, pausing, giving a card's memory back.
+WANT_ROUTES = ["/generate", "/v1/completions", "/health", "/health_generate", "/get_model_info", "/server_info",
+               "/flush_cache", "/pause_generation", "/continue_generation", "/update_weights_from_disk",
+               "/update_weights_from_tensor", "/update_weights_from_distributed", "/init_weights_update_group",
+               "/begin_weight_update", "/end_weight_update", "/update_weight_version",
+               "/release_memory_occupation", "/resume_memory_occupation", "/load_lora_adapter",
+               "/unload_lora_adapter", "/abort_request"]
+FLAG_WORDS = ("memory-saver", "lora", "admin", "api-key", "weight", "version", "radix", "cache", "mem-fraction",
+              "max-running", "max-total", "max-prefill", "chunked", "cuda-graph", "schedule", "deterministic",
+              "tp", "dp", "port", "host", "model-path", "load-format", "dtype", "warmup", "metrics")
+
+
+def class_fields(src):
+    """{class name: ["field: type = default", ...]} for request classes, read from source text."""
+    import ast
+    out = {}
+    try:
+        tree = ast.parse(src)
+    except (SyntaxError, ValueError):
+        return out
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and CLASS_RE.search(node.name):
+            fields = []
+            for st in node.body:
+                if isinstance(st, ast.AnnAssign) and isinstance(st.target, ast.Name):
+                    f = "%s: %s" % (st.target.id, ast.get_source_segment(src, st.annotation))
+                    if st.value is not None:
+                        f += " = %s" % ast.get_source_segment(src, st.value)
+                    fields.append(f[:160])
+            out[node.name] = fields
+    return out
+
+
+def engine():
+    """Read the installed engine's source as text: nothing is imported and no card is touched."""
+    import importlib.util
+    out = {}
+    for pkg in ("sglang", "vllm"):
+        try:
+            spec = importlib.util.find_spec(pkg)
+        except Exception:
+            spec = None
+        if spec is None or not spec.submodule_search_locations:
+            continue
+        root = list(spec.submodule_search_locations)[0]
+        routes, flags, classes, nfiles = set(), set(), {}, 0
+        for dirpath, dirs, files in os.walk(root):
+            dirs[:] = [x for x in dirs if x not in ("__pycache__", "test", "tests")]
+            for fn in files:
+                if not fn.endswith(".py"):
+                    continue
+                nfiles += 1
+                try:
+                    with open(os.path.join(dirpath, fn), encoding="utf-8", errors="replace") as f:
+                        src = f.read()
+                except OSError:
+                    continue
+                routes.update("%s %s" % (m.group(1).upper(), m.group(2)) for m in ROUTE_RE.finditer(src))
+                if "add_argument" in src:
+                    flags.update(FLAG_RE.findall(src))
+                if CLASS_RE.search(src):
+                    classes.update(class_fields(src))
+        paths = {r.split(" ", 1)[1] for r in routes}
+        out[pkg] = {"path": tidy(root), "files": nfiles, "routes": sorted(routes), "flags": sorted(flags),
+                    "requests": classes, "wanted_present": [r for r in WANT_ROUTES if r in paths],
+                    "wanted_missing": [r for r in WANT_ROUTES if r not in paths]}
     return out
 
 
@@ -500,8 +628,14 @@ def summary(d):
         L.append("driver     : %s, CUDA up to %s" % (g.get("driver"), g.get("driver_cuda")))
         speeds = sorted(set(re.findall(r"([\d.]+)\s*GB/s", g.get("nvlink", ""))))
         L.append("nvlink     : " + ("link speeds %s GB/s" % ", ".join(speeds) if speeds else "no link speeds reported"))
-    L.append("host       : %s cpus (%s usable), %s GiB RAM (%s available), %s NUMA nodes" % (
-        h.get("cpus"), h.get("cpus_usable"), h.get("ram_total_gib"), h.get("ram_available_gib"), h.get("numa_nodes")))
+    L.append("host       : %s GiB RAM (%s available), %s NUMA nodes, %s" % (
+        h.get("ram_total_gib"), h.get("ram_available_gib"), h.get("numa_nodes"), h.get("cpu_model")))
+    c = d.get("cpu", {})
+    L.append("cpu        : os count %s, affinity %s, /proc/cpuinfo %s, quota %s (%s)" % (
+        c.get("os_cpu_count"), c.get("affinity"), c.get("cpuinfo_processors"),
+        "unknown" if c.get("quota_source") == "unreadable" else
+        "none" if c.get("quota_cpus") is None else "%s cpus" % c["quota_cpus"], c.get("quota_source")))
+    L.append("cpu speed  : " + ", ".join("%s processes x%s" % kv for kv in c.get("speedup_by_processes", {}).items()))
     for k, v in h["disks"].items():
         if "error" not in v:
             L.append("disk %-6s: %7.0f GiB free of %7.0f, %s, %s" % (k[:6], v["free_gib"], v["total_gib"], v["fs"], v["path"]))
@@ -512,6 +646,15 @@ def summary(d):
     L.append("packages   : " + (", ".join(have) or "none of the ones looked for"))
     if "torch" in p:
         L.append("torch      : " + json.dumps(p["torch"]))
+    for name, eng in d.get("engine", {}).items():
+        L.append("engine     : %s, %d files, %d routes, %d flags" % (name, eng["files"], len(eng["routes"]), len(eng["flags"])))
+        L.append("  present  : " + (" ".join(eng["wanted_present"]) or "none"))
+        L.append("  missing  : " + (" ".join(eng["wanted_missing"]) or "none"))
+        L.append("  flags    : " + " ".join(f for f in eng["flags"] if any(w in f for w in FLAG_WORDS)))
+        for cls, fields in sorted(eng["requests"].items()):
+            L.append("  %s(%s)" % (cls, "; ".join(fields)))
+    if not d.get("engine"):
+        L.append("engine     : neither sglang nor vllm is installed")
     L.append("reachable  : " + ", ".join(k for k, v in d["network"].items() if v["ok"]))
     L.append("unreachable: " + (", ".join(k for k, v in d["network"].items() if not v["ok"]) or "none"))
     ms = d["models"]
@@ -545,9 +688,9 @@ def main():
     ap.add_argument("--models-dir", action="append", default=[], help="extra folder to search for models; repeatable")
     args = ap.parse_args()
 
-    d = {"probe_version": 1, "time_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-    for key, fn in (("gpus", gpus), ("host", host), ("environment", environment), ("python", python_info),
-                    ("network", network), ("models", lambda: models(args.models_dir))):
+    d = {"probe_version": 2, "time_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    for key, fn in (("gpus", gpus), ("host", host), ("cpu", cpu), ("environment", environment),
+                    ("python", python_info), ("engine", engine), ("network", network), ("models", lambda: models(args.models_dir))):
         print("probing %s ..." % key, file=sys.stderr)
         d[key] = fn()
     write(d)        # facts are safe on disk before anything touches a card

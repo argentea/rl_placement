@@ -2,7 +2,7 @@
 
 Date: 2026-11-27
 
-> Note, 2026-11-27, later the same day. The hardware is now fixed: 8 x H800 on the user's side, no H200 and no second node. The recommendation of H200 below is superseded, and the items marked "16" are out of reach. There is also no existing RL system to measure, so these experiments become stages 1 to 3 of building the testbed (see `STATUS.md`). This plan will be rewritten once `testbed/probe.py` has reported what the machine holds.
+> Note, 2026-11-27, later the same day. The hardware is fixed: 8 x H200 on one node, as recommended below, and no second node, so the items marked "16" are out of reach. An earlier version of this note said 8 x H800, on the user's first description; the probe showed 140 GiB cards and the user confirmed H200. The inference engine is SGLang, which the machine has installed. There is no existing RL system to measure, so these experiments become stages 1 to 3 of building the testbed (see `STATUS.md`). This plan will be rewritten once the engine smoke test is back.
 
 ## Purpose
 

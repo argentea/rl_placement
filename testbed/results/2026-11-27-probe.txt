@@ -1,0 +1,32 @@
+# Output of `python3 testbed/probe.py --bench` (probe version 1), as pasted by the user on 2026-11-27.
+# The cards are H200. The driver reports them as "NVIDIA L20X"; the user says this is a naming limit of the server.
+# "bare host" below is wrong: the root filesystem is an overlay, so this is a container. Fixed in probe version 2.
+# "2 cpus (192 usable)" is unresolved; probe version 2 measures it.
+
+cards      : 8 x NVIDIA L20X, 140 GiB
+in use     : 0 of 8 cards hold more than 1 GiB
+driver     : 550.127.08, CUDA up to 13.0
+nvlink     : link speeds 26.562 GB/s
+host       : 2 cpus (192 usable), 800.0 GiB RAM (798.1 available), 2 NUMA nodes
+disk repo  :     416 GiB free of 1048576, nfs, /ossfs/workspace/rl_placement/testbed
+disk home  :     795 GiB free of     800, overlay, ~
+disk tmp   :     795 GiB free of     800, overlay, /tmp
+disk shm   :     404 GiB free of     404, tmpfs, /dev/shm
+disk hfhub :     795 GiB free of     800, overlay, ~/.cache
+setting    : bare host, root, tools: cmake gcc git hf huggingface-cli modelscope numactl nvcc pip pip3 screen tmux
+python     : 3.12.3, pip 25.2
+packages   : torch 2.13.0, transformers 5.12.1, tokenizers 0.22.2, peft 0.22.0, accelerate 1.10.1, datasets 5.2.0, safetensors 0.7.0, huggingface-hub 1.33.0, modelscope 1.40.3, deepspeed 0.19.1, bitsandbytes 0.50.2, flash-attn 2.8.4, triton 3.7.1, sglang 0.5.19.dev126+g7923008cb, openai 2.6.1, aiohttp 3.14.5, httpx 0.28.1, fastapi 0.165.0, uvicorn 0.54.0, numpy 1.26.4, nvidia-ml-py 12.575.51, pynvml 12.0.0
+torch      : {"version": "2.13.0+cu130", "cuda_build": "13.0", "cuda_available": true, "device_count": 8, "cudnn": 92000, "nccl": "2.29.7"}
+reachable  : hf-mirror.com, modelscope.cn, pypi.org, download.pytorch.org, github.com
+unreachable: huggingface.co, pypi mirror (tuna)
+models     : none found
+bench  0   : matmul 676.1 / 704.2 TFLOP/s (fp16 / bf16), copy 4277.5 GB/s, host to card 55.45 GB/s
+bench  1   : matmul 673.1 / 700.0 TFLOP/s (fp16 / bf16), copy 4073.5 GB/s, host to card 55.47 GB/s
+bench  2   : matmul 680.4 / 710.6 TFLOP/s (fp16 / bf16), copy 4162.8 GB/s, host to card 55.47 GB/s
+bench  3   : matmul 694.5 / 697.7 TFLOP/s (fp16 / bf16), copy 4090.7 GB/s, host to card 55.47 GB/s
+bench  4   : matmul 682.5 / 695.7 TFLOP/s (fp16 / bf16), copy 4078.2 GB/s, host to card 55.48 GB/s
+bench  5   : matmul 675.6 / 702.6 TFLOP/s (fp16 / bf16), copy 4142.7 GB/s, host to card 55.46 GB/s
+bench  6   : matmul 673.0 / 690.7 TFLOP/s (fp16 / bf16), copy 4046.5 GB/s, host to card 55.48 GB/s
+bench  7   : matmul 681.8 / 704.1 TFLOP/s (fp16 / bf16), copy 4092.5 GB/s, host to card 55.47 GB/s
+bench      : card 0 to card 1 395.66 GB/s
+bench      : card 0 to card 7 395.22 GB/s
