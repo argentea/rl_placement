@@ -1,0 +1,31 @@
+{
+  "_readme": "Measured factors for rlsim. Keys starting with _ are ignored. Values here are the simulator defaults; replace them with measurements (see experiment-plan.md). Load with load_factors(cluster, 'factors.json').",
+  "cards": {
+    "H200-141G": {
+      "_from": "E1 concurrency sweep (fit_inference) and E4 training throughput (calibrate)",
+      "infer_eff": 0.15,
+      "membw_eff": 0.85,
+      "step_overhead_s": 0.001,
+      "train_eff": 0.55
+    },
+    "H800-80G": {
+      "infer_eff": 0.15,
+      "membw_eff": 0.85,
+      "step_overhead_s": 0.001,
+      "train_eff": 0.55
+    }
+  },
+  "cluster": {
+    "_from": "E2 (mem_usable), E4 (train_scale_eff), E5 (switch_*, load_gbs), E6 (sync_fixed_s, intra_gbs, net_gbs), E7 (tp_eff)",
+    "mem_usable": 0.90,
+    "train_scale_eff": 0.97,
+    "tp_eff": 0.85,
+    "switch_to_train_s": 5.0,
+    "switch_to_infer_s": 10.0,
+    "switch_resident_s": 1.0,
+    "load_gbs": 8.0,
+    "sync_fixed_s": 2.0,
+    "intra_gbs": 8.0,
+    "net_gbs": 10.0
+  }
+}

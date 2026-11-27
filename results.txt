@@ -1,0 +1,232 @@
+=== A. agentic, 8B, 8 x H100, batch 256
+8 x H100-80G | 8B dense: 8B params, full FT
+episode (run average): 6330 tok (1805 generated), 15.0 s env wait | batch 256, target 40 updates, lag_alpha 0.0
+replica on H100-80G: 1 card(s), 151 tok/s per stream, 8246 tok/s saturated, 66 slots (memory allows 67)
+all cards serving: 528 slots | all cards training: 22.1 s per step
+split sweep, hours by training cards: 2:0.93  3:0.64  4:0.63  5:0.82  6:1.20  7:2.34
+deploy                               to target    +- updates   s/upd    lag  p95 value   len waste   gen trn  sw idle  note
+time-shared                             2.13 h  0.02      40   191.3   0.00  0.0  1.00  1.00    0%    13  12  10   66  
+time-shared, resident                   1.94 h  0.02      40   174.6   0.00  0.0  1.00  1.00    0%    14  13   1   72  
+time-shared, cut +25% discard           1.01 h  0.00      40    90.8   0.00  0.0  1.00  0.82   37%    30  20  21   29  
+time-shared, cut +25% carry             1.11 h  0.01      40    99.6   0.17  0.9  1.00  1.00   33%    33  22  19   26  
+split 4 train                           0.64 h  0.00      40    57.2   1.20  2.0  1.00  0.99    0%    44  37   3   15  
+split 4 train, KV rebuild               1.08 h  0.01      40    97.6   1.20  2.1  1.00  0.99   84%    47  22   2   30  
+split 4 train, rolling sync, KV rebuild    1.08 h  0.01      40    97.3   1.22  2.1  1.00  0.99   84%    46  22   2   30  
+split 4 train, bound 1                  1.86 h  0.01      40   167.4   0.74  1.0  1.00  1.00    0%    15  13   1   71  
+dynamic split                           0.63 h  0.00      40    56.6   1.51  2.5  1.00  0.99    2%    45  37   5   12  train cards 3..4
+dynamic split, KV rebuild               0.93 h  0.00      40    84.1   1.50  2.5  1.00  0.99   60%    47  25   4   24  train cards 2..4
+
+=== B. reasoning, 8B, 8 x H100, batch 256
+8 x H100-80G | 8B dense: 8B params, full FT
+episode (run average): 3509 tok (3010 generated), 0.0 s env wait | batch 256, target 40 updates, lag_alpha 0.0
+replica on H100-80G: 1 card(s), 151 tok/s per stream, 8673 tok/s saturated, 121 slots (memory allows 121)
+all cards serving: 968 slots | all cards training: 12.0 s per step
+split sweep, hours by training cards: 2:0.49  3:0.34  4:0.35  5:0.44  6:0.64  7:1.23
+deploy                               to target    +- updates   s/upd    lag  p95 value   len waste   gen trn  sw idle  note
+time-shared                             1.53 h  0.01      40   138.0   0.00  0.0  1.00  1.00    0%     9   9  14   69  
+time-shared, resident                   1.35 h  0.01      40   121.3   0.00  0.0  1.00  1.00    0%    10  10   2   78  
+time-shared, cut +25% discard           0.63 h  0.01      40    57.0   0.00  0.0  1.00  0.67   52%    23  14  33   31  
+time-shared, cut +25% carry             0.75 h  0.01      40    67.6   0.17  1.0  1.00  0.99   46%    27  18  28   28  
+split 3 train                           0.34 h  0.01      40    30.5   1.39  2.0  1.00  0.98    0%    43  36   8   13  
+split 3 train, KV rebuild               0.53 h  0.01      40    47.7   1.13  2.4  1.00  0.97   99%    52  23   5   19  
+split 3 train, rolling sync, KV rebuild    0.55 h  0.01      40    49.8   1.34  2.5  1.00  0.97  109%    53  22   5   20  
+split 3 train, bound 1                  1.26 h  0.01      40   113.1   0.77  1.0  1.00  1.00    0%    11  10   2   76  
+dynamic split                           0.37 h  0.01      40    33.1   0.97  2.0  1.00  0.97    3%    40  33   9   17  train cards 3..5
+dynamic split, KV rebuild               0.59 h  0.01      40    52.8   1.14  2.2  1.00  0.97  103%    49  21   6   24  train cards 2..4
+
+=== C. reasoning, 8B, 8 x H100, batch 4096 (enough to saturate the fleet)
+8 x H100-80G | 8B dense: 8B params, full FT
+episode (run average): 3509 tok (3010 generated), 0.0 s env wait | batch 4096, target 10 updates, lag_alpha 0.0
+replica on H100-80G: 1 card(s), 151 tok/s per stream, 8673 tok/s saturated, 121 slots (memory allows 121)
+all cards serving: 968 slots | all cards training: 184.2 s per step
+split sweep, hours by training cards: 2:2.01  3:1.41  4:1.30  5:1.68  6:2.45  7:4.82
+deploy                               to target    +- updates   s/upd    lag  p95 value   len waste   gen trn  sw idle  note
+time-shared                             1.36 h  0.00      10   488.2   0.00  0.0  1.00  1.00    0%    41  38   4   17  
+time-shared, resident                   1.34 h  0.00      10   482.9   0.00  0.0  1.00  1.00    0%    42  39   0   19  
+time-shared, cut +25% discard           1.07 h  0.00      10   385.9   0.00  0.0  1.00  0.81   29%    54  38   5    3  
+time-shared, cut +25% carry             1.27 h  0.01      10   456.9   0.11  0.8  1.00  0.98   21%    54  40   4    3  
+split 4 train                           1.30 h  0.01      10   469.4   0.75  1.0  1.00  0.99    0%    47  38   0   15  
+split 4 train, KV rebuild               1.42 h  0.01      10   511.7   0.75  1.0  1.00  0.99   11%    47  35   0   18  
+split 4 train, rolling sync, KV rebuild    1.42 h  0.01      10   511.6   0.76  1.0  1.00  0.99   11%    47  35   0   18  
+split 4 train, bound 1                  1.49 h  0.00      10   538.1   0.74  1.0  1.00  1.00    0%    41  33   0   25  
+dynamic split                           1.28 h  0.01      10   459.8   1.21  2.0  1.00  0.99    0%    50  39   1   11  train cards 3..4
+dynamic split, KV rebuild               1.35 h  0.01      10   484.4   1.20  2.0  1.00  0.99   10%    51  37   1   11  train cards 3..4
+
+=== D. agentic, 8B, 2 x H100 (small fleet)
+2 x H100-80G | 8B dense: 8B params, full FT
+episode (run average): 6330 tok (1805 generated), 15.0 s env wait | batch 256, target 40 updates, lag_alpha 0.0
+replica on H100-80G: 1 card(s), 151 tok/s per stream, 8246 tok/s saturated, 66 slots (memory allows 67)
+all cards serving: 132 slots | all cards training: 81.9 s per step
+deploy                               to target    +- updates   s/upd    lag  p95 value   len waste   gen trn  sw idle  note
+time-shared                             3.42 h  0.03      40   307.6   0.00  0.0  1.00  1.00    0%    32  27   8   33  
+time-shared, resident                infeasible: inference weights and KV cache do not fit
+time-shared, cut +25% discard           2.38 h  0.01      40   214.5   0.00  0.0  1.00  0.85   33%    51  32  12    5  
+time-shared, cut +25% carry             2.70 h  0.01      40   242.9   0.16  0.9  1.00  1.00   28%    51  34  10    4  
+
+=== E. agentic, 70B full FT, 32 x H100, batch 512
+32 x H100-80G | 70B dense: 70B params, full FT
+episode (run average): 6330 tok (1805 generated), 15.0 s env wait | batch 512, target 20 updates, lag_alpha 0.0
+replica on H100-80G: 3 card(s), 58 tok/s per stream, 2294 tok/s saturated, 18 slots (memory allows 18)
+all cards serving: 144 slots | all cards training: 97.0 s per step
+split sweep, hours by training cards: 18:3.01  19:3.96  20:3.96  21:3.96  22:5.86  23:5.86  24:5.86  25:5.87  26:5.87  27:11.60  28:11.60  29:11.60
+deploy                               to target    +- updates   s/upd    lag  p95 value   len waste   gen trn  sw idle  note
+time-shared                             3.01 h  0.04      20   542.1   0.00  0.0  1.00  1.00    0%    24  18   4   54  
+time-shared, resident                   2.84 h  0.04      20   510.5   0.00  0.0  1.00  1.00    0%    30  19   0   50  
+time-shared, cut +25% discard           2.21 h  0.01      20   397.9   0.00  0.0  1.00  0.90   24%    37  22   5   36  
+time-shared, cut +25% carry             2.32 h  0.00      20   416.9   0.13  0.8  1.00  1.00   21%    38  23   5   34  
+split 18 train                          3.01 h  0.00      20   542.2   0.36  1.0  1.00  1.00    0%    25  17   1   57  
+split 18 train, KV rebuild              3.22 h  0.00      20   579.8   0.36  1.0  1.00  1.00   11%    25  16   1   57  
+split 18 train, rolling sync, KV rebuild    3.22 h  0.00      20   579.8   0.41  1.0  1.00  1.00   11%    25  16   1   57  
+split 18 train, bound 1                 3.78 h  0.05      20   679.8   0.31  1.0  1.00  1.00    0%    20  14   1   66  
+dynamic split                           3.01 h  0.00      20   542.2   0.36  1.0  1.00  1.00    0%    25  17   1   57  
+dynamic split, KV rebuild               3.22 h  0.00      20   579.8   0.36  1.0  1.00  1.00   11%    25  16   1   57  
+
+=== F. agentic, 70B adapters, 32 x H100, batch 512
+32 x H100-80G | 70B dense + adapters: 70B params, adapters 0.5%
+episode (run average): 6330 tok (1805 generated), 15.0 s env wait | batch 512, target 20 updates, lag_alpha 0.0
+replica on H100-80G: 3 card(s), 58 tok/s per stream, 2294 tok/s saturated, 18 slots (memory allows 18)
+all cards serving: 144 slots | all cards training: 97.0 s per step
+split sweep, hours by training cards: 3:5.26  4:4.02  5:3.26  6:2.77  7:2.40  8:2.13  9:2.02  10:2.01  11:2.38  12:2.38  13:2.37  14:2.94  15:2.94  16:2.93  17:2.93  18:2.93  19:3.88  20:3.88  21:3.88  22:5.79  23:5.78  24:5.78  25:5.78  26:5.78  27:11.51  28:11.51  29:11.51
+deploy                               to target    +- updates   s/upd    lag  p95 value   len waste   gen trn  sw idle  note
+time-shared                             2.99 h  0.04      20   538.3   0.00  0.0  1.00  1.00    0%    24  18   3   54  
+time-shared, resident                   3.02 h  0.05      20   544.2   0.00  0.0  1.00  1.00    0%    24  18   0   58  
+time-shared, cut +25% discard           2.19 h  0.01      20   394.1   0.00  0.0  1.00  0.90   24%    37  22   4   36  
+time-shared, cut +25% carry             2.30 h  0.00      20   413.1   0.13  0.8  1.00  1.00   21%    39  23   4   34  
+split 10 train                          2.01 h  0.00      20   361.6   0.89  1.1  1.00  1.00    0%    38  25   0   36  
+split 10 train, KV rebuild              2.22 h  0.01      20   399.3   0.89  1.1  1.00  1.00   16%    40  23   0   37  
+split 10 train, rolling sync, KV rebuild    2.22 h  0.01      20   399.3   0.90  1.2  1.00  1.00   16%    40  23   0   37  
+split 10 train, bound 1                 2.85 h  0.04      20   513.5   0.82  1.0  1.00  1.00    0%    27  18   0   55  
+dynamic split                           2.28 h  0.01      20   409.9   1.10  2.0  1.00  1.00    0%    34  22   0   43  train cards 7..16
+dynamic split, KV rebuild               2.53 h  0.00      20   455.0   1.07  2.0  1.00  1.00   15%    36  20   0   44  train cards 7..16
+
+=== G. drift: reasoning, 8B, 8 x H100, generation length grows 6x over the run
+8 x H100-80G | 8B dense: 8B params, full FT
+episode (run average): 4093 tok (3594 generated), 0.0 s env wait | batch 256, target 60 updates, lag_alpha 0.0
+replica on H100-80G: 1 card(s), 151 tok/s per stream, 8581 tok/s saturated, 64 slots (memory allows 64)
+all cards serving: 512 slots | all cards training: 14.0 s per step
+split sweep, hours by training cards: 2:0.66  3:0.46  4:0.50  5:0.65  6:0.95  7:1.84
+deploy                               to target    +- updates   s/upd    lag  p95 value   len waste   gen trn  sw idle  note
+time-shared                             3.25 h  0.09      60   195.2   0.00  0.0  1.00  1.00    0%     6   6  10   78  
+time-shared, resident                   2.97 h  0.09      60   178.4   0.00  0.0  1.00  1.00    0%     7   7   1   86  
+time-shared, cut +25% discard           0.91 h  0.00      60    54.3   0.00  0.0  1.00  0.66   51%    22  14  35   29  
+time-shared, cut +25% carry             1.09 h  0.01      60    65.5   0.17  1.0  1.00  0.98   50%    27  17  29   27  
+split 3 train                           0.46 h  0.00      60    27.4   1.23  2.0  1.00  0.94    0%    44  36   9   11  
+split 3 train, KV rebuild               0.74 h  0.01      60    44.6   1.04  2.0  1.00  0.93  106%    53  22   6   19  
+split 3 train, rolling sync, KV rebuild    0.76 h  0.01      60    45.5   1.31  2.2  1.00  0.93  114%    54  22   5   19  
+split 3 train, bound 1                  2.77 h  0.08      60   166.1   0.78  1.0  1.00  0.98    0%     7   6   1   85  
+dynamic split                           0.50 h  0.01      60    29.8   1.17  2.0  1.00  0.93    2%    41  33  11   15  train cards 2..4
+dynamic split, KV rebuild               0.71 h  0.01      60    42.8   1.24  2.1  1.00  0.93  103%    55  23   8   15  train cards 2..4
+
+=== H. mixed fleet: 4 x H100 + 8 x A100, agentic 8B; trainer on the fast cards, then on the slow cards
+-- trainer takes the fast cards first
+4 x H100-80G, 8 x A100-80G | 8B dense: 8B params, full FT
+episode (run average): 6330 tok (1805 generated), 15.0 s env wait | batch 256, target 40 updates, lag_alpha 0.0
+replica on H100-80G: 1 card(s), 151 tok/s per stream, 8246 tok/s saturated, 66 slots (memory allows 67)
+replica on A100-80G: 1 card(s), 98 tok/s per stream, 2601 tok/s saturated, 29 slots (memory allows 67)
+all cards serving: 496 slots | all cards training: 27.5 s per step
+split sweep, hours by training cards: 2:0.94  3:0.72  4:0.97  5:1.09  6:1.26  7:1.50  8:1.86  9:2.47  10:3.68  11:7.29
+deploy                               to target    +- updates   s/upd    lag  p95 value   len waste   gen trn  sw idle  note
+time-shared                             2.46 h  0.03      40   221.7   0.00  0.0  1.00  1.00    0%    15  13   8   65  
+time-shared, resident                   2.27 h  0.03      40   204.0   0.00  0.0  1.00  1.00    0%    17  14   1   68  
+time-shared, cut +25% discard           1.17 h  0.00      40   105.1   0.00  0.0  1.00  0.82   37%    34  21  17   27  
+time-shared, cut +25% carry             1.29 h  0.00      40   116.0   0.17  0.9  1.00  1.00   32%    37  24  16   24  
+split 3 train                           0.72 h  0.00      40    64.5   1.34  2.3  1.00  0.99    0%    66  22   4    8  
+split 3 train, KV rebuild               1.27 h  0.00      40   114.6   1.23  2.3  1.00  0.99   91%    70  12   2   15  
+split 3 train, rolling sync, KV rebuild    1.27 h  0.01      40   114.2   1.22  2.2  1.00  0.99   92%    70  12   2   15  
+split 3 train, bound 1                  2.24 h  0.02      40   201.9   0.78  1.0  1.00  1.00    0%    22   7   1   70  
+dynamic split                           0.92 h  0.01      40    82.5   1.28  2.3  1.00  0.99    1%    56  18   4   22  train cards 2..6
+dynamic split, KV rebuild               1.27 h  0.01      40   114.0   1.29  2.5  1.00  0.99   69%    64  13   3   21  train cards 2..6
+
+-- trainer takes the slow cards first
+4 x H100-80G, 8 x A100-80G | 8B dense: 8B params, full FT
+episode (run average): 6330 tok (1805 generated), 15.0 s env wait | batch 256, target 40 updates, lag_alpha 0.0
+replica on A100-80G: 1 card(s), 98 tok/s per stream, 2601 tok/s saturated, 29 slots (memory allows 67)
+replica on H100-80G: 1 card(s), 151 tok/s per stream, 8246 tok/s saturated, 66 slots (memory allows 67)
+all cards serving: 496 slots | all cards training: 27.5 s per step
+split sweep, hours by training cards: 2:2.92  3:1.99  4:1.52  5:1.23  6:1.04  7:0.90  8:0.80  9:0.82  10:1.20  11:2.34
+deploy                               to target    +- updates   s/upd    lag  p95 value   len waste   gen trn  sw idle  note
+time-shared                             2.47 h  0.04      40   222.7   0.00  0.0  1.00  1.00    0%    15  13   8   65  
+time-shared, resident                   2.28 h  0.04      40   205.3   0.00  0.0  1.00  1.00    0%    17  14   1   69  
+time-shared, cut +25% discard           1.17 h  0.00      40   105.1   0.00  0.0  1.00  0.82   37%    34  21  17   27  
+time-shared, cut +25% carry             1.29 h  0.00      40   116.2   0.17  0.9  1.00  1.00   32%    37  24  16   24  
+split 8 train                           0.80 h  0.00      40    71.6   1.83  2.6  1.00  0.99    0%    24  65   2   10  
+split 8 train, KV rebuild               1.04 h  0.00      40    93.4   1.45  2.4  1.00  0.99   71%    30  49   1   19  
+split 8 train, rolling sync, KV rebuild    1.06 h  0.00      40    95.3   1.45  2.4  1.00  0.99   76%    30  49   1   20  
+split 8 train, bound 1                  1.86 h  0.02      40   167.4   0.93  1.0  1.00  1.00    0%    10  28   1   61  
+dynamic split                           0.79 h  0.00      40    71.2   1.55  2.4  1.00  0.99    1%    25  60   3   12  train cards 6..9
+dynamic split, KV rebuild               0.99 h  0.02      40    89.5   1.61  2.6  1.00  0.99   57%    32  51   3   14  train cards 6..8
+
+=== I. scenario A plus the missing costs: GPU judge, 64 env workers, correlated lengths
+8 x H100-80G | 8B dense: 8B params, full FT
+episode (run average): 6953 tok (2428 generated), 17.0 s env wait | batch 256, target 40 updates, lag_alpha 0.0
+replica on H100-80G: 1 card(s), 151 tok/s per stream, 8157 tok/s saturated, 54 slots (memory allows 61)
+all cards serving: 432 slots | all cards training: 24.5 s per step
+split sweep, hours by training cards: 2:1.06  3:0.84  4:0.99  5:1.30  6:1.91  7:3.77
+deploy                               to target    +- updates   s/upd    lag  p95 value   len waste   gen trn  sw idle  note
+time-shared                             3.74 h  0.08      40   336.6   0.00  0.0  1.00  1.00    0%    11   8   6   75  
+time-shared, resident                   3.55 h  0.08      40   319.9   0.00  0.0  1.00  1.00    0%    12   8   1   79  
+time-shared, cut +25% discard           1.37 h  0.00      40   123.2   0.00  0.0  1.00  0.73   46%    33  14  15   38  
+time-shared, cut +25% carry             1.54 h  0.01      40   138.2   0.17  1.0  1.00  0.99   45%    37  18  14   32  
+split 3 train                           0.84 h  0.00      40    75.9   1.34  2.4  1.00  0.98    0%    52  31   3   14  
+split 3 train, KV rebuild               1.36 h  0.01      40   122.3   1.27  2.4  1.00  0.98  112%    56  19   2   22  
+split 3 train, rolling sync, KV rebuild    1.35 h  0.01      40   121.8   1.22  2.3  1.00  0.98  112%    57  19   2   22  
+split 3 train, bound 1                  3.44 h  0.08      40   309.6   0.83  1.0  1.00  1.00    0%    13   8   1   79  
+dynamic split                           0.93 h  0.01      40    84.1   1.40  2.5  1.00  0.98    2%    48  28   4   20  train cards 2..4
+dynamic split, KV rebuild               1.32 h  0.01      40   118.4   1.37  2.6  1.00  0.98  107%    57  20   3   20  train cards 2..4
+
+=== J. price of lag: scenario A, time to target as lag_alpha rises
+  [0] time-shared
+  [1] time-shared, cut +25% discard
+  [2] time-shared, cut +25% carry
+  [3] split 4 train, KV rebuild
+  [4] split 4 train, bound 1, KV rebuild
+  [5] dynamic split, KV rebuild
+lag_alpha       [0]      [1]      [2]      [3]      [4]      [5]
+0.0          2.13 h   1.01 h   1.10 h   1.08 h   2.07 h   0.93 h
+0.05         2.13 h   1.01 h   1.13 h   1.16 h   2.17 h   1.00 h
+0.1          2.13 h   1.01 h   1.13 h   1.21 h   2.23 h   1.07 h
+0.2          2.13 h   1.01 h   1.16 h   1.35 h   2.38 h   1.21 h
+0.5          2.13 h   1.01 h   1.19 h   1.70 h   2.82 h   1.59 h
+1.0          2.13 h   1.01 h   1.24 h   2.30 h   3.51 h   2.17 h
+
+=== K. sensitivity: scenario A as the inference efficiency factor moves
+infer_eff 0.08: best split 3 train | time-shared 2.27 h | time-shared, cut +25% discard 1.18 h | split 3 train, KV rebuild 1.38 h
+infer_eff 0.15: best split 4 train | time-shared 2.13 h | time-shared, cut +25% discard 1.01 h | split 4 train, KV rebuild 1.08 h
+infer_eff 0.30: best split 4 train | time-shared 2.05 h | time-shared, cut +25% discard 0.92 h | split 4 train, KV rebuild 0.65 h
+
+=== L. proposed experiment: 8 x H200, one node, agentic 8B (prediction with default factors)
+8 x H200-141G | 8B dense: 8B params, full FT
+episode (run average): 6330 tok (1805 generated), 15.0 s env wait | batch 256, target 40 updates, lag_alpha 0.0
+replica on H200-141G: 1 card(s), 203 tok/s per stream, 8246 tok/s saturated, 54 slots (memory allows 133)
+all cards serving: 432 slots | all cards training: 22.1 s per step
+split sweep, hours by training cards: 2:0.93  3:0.64  4:0.64  5:0.83  6:1.22  7:2.38
+deploy                               to target    +- updates   s/upd    lag  p95 value   len waste   gen trn  sw idle  note
+time-shared                             1.99 h  0.02      40   178.7   0.00  0.0  1.00  1.00    0%    14  13  10   63  
+time-shared, resident                   1.80 h  0.02      40   162.0   0.00  0.0  1.00  1.00    0%    15  14   1   70  
+time-shared, cut +25% discard           0.96 h  0.00      40    86.3   0.00  0.0  1.00  0.82   37%    32  21  22   26  
+time-shared, cut +25% carry             1.06 h  0.00      40    95.2   0.17  0.9  1.00  1.00   32%    34  23  20   23  
+split 4 train                           0.64 h  0.00      40    57.8   1.13  1.9  1.00  0.99    0%    43  37   3   16  
+split 4 train, KV rebuild               1.01 h  0.00      40    90.7   1.13  1.9  1.00  0.99   68%    46  24   2   28  
+split 4 train, rolling sync, KV rebuild    1.01 h  0.01      40    90.6   1.17  2.0  1.00  0.99   68%    46  24   2   28  
+split 4 train, bound 1                  1.72 h  0.01      40   155.2   0.77  1.0  1.00  1.00    0%    16  14   1   69  
+dynamic split                           0.63 h  0.00      40    56.3   1.47  2.4  1.00  0.99    1%    46  38   5   11  train cards 3..4
+dynamic split, KV rebuild               0.89 h  0.00      40    80.3   1.53  2.4  1.00  0.99   49%    46  26   4   23  train cards 2..4
+
+=== M. proposed experiment: 16 x H200, two nodes, agentic 8B (prediction with default factors)
+16 x H200-141G | 8B dense: 8B params, full FT
+episode (run average): 6330 tok (1805 generated), 15.0 s env wait | batch 256, target 40 updates, lag_alpha 0.0
+replica on H200-141G: 1 card(s), 203 tok/s per stream, 8246 tok/s saturated, 54 slots (memory allows 133)
+all cards serving: 864 slots | all cards training: 11.6 s per step
+split sweep, hours by training cards: 2:0.93  3:0.63  4:0.48  5:0.39  6:0.35  7:0.35  8:0.36  9:0.40  10:0.45  11:0.52  12:0.63  13:0.83  14:1.21  15:2.37
+deploy                               to target    +- updates   s/upd    lag  p95 value   len waste   gen trn  sw idle  note
+time-shared                             1.79 h  0.02      40   161.4   0.00  0.0  1.00  1.00    0%     8   7  11   74  
+time-shared, resident                   1.62 h  0.02      40   145.7   0.00  0.0  1.00  1.00    0%     8   8   1   82  
+time-shared, cut +25% discard           0.77 h  0.00      40    69.6   0.00  0.0  1.00  0.82   37%    20  14  25   41  
+time-shared, cut +25% carry             0.81 h  0.00      40    73.3   0.17  0.9  1.00  1.00   32%    22  16  24   38  
+split 7 train                           0.35 h  0.00      40    31.2   1.43  2.6  1.00  0.99    0%    40  35   6   18  
+split 7 train, KV rebuild               0.60 h  0.00      40    53.9   1.37  2.6  1.00  0.99  106%    47  20   4   29  
+split 7 train, rolling sync, KV rebuild    0.61 h  0.01      40    54.9   1.42  2.7  1.00  0.99  111%    47  20   4   29  
+split 7 train, bound 1                  1.54 h  0.01      40   139.0   0.71  1.0  1.00  1.00    0%     9   8   1   82  
+dynamic split                           0.36 h  0.00      40    32.6   1.48  2.6  1.00  0.99    1%    39  34   8   19  train cards 5..8
+dynamic split, KV rebuild               0.57 h  0.00      40    51.1   1.34  2.5  1.00  0.99   94%    47  21   6   26  train cards 5..8
+
