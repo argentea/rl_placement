@@ -2,6 +2,8 @@
 
 Date: 2026-11-27
 
+> Note, 2026-11-27, later the same day. The hardware is now fixed: 8 x H800 on the user's side, no H200 and no second node. The recommendation of H200 below is superseded, and the items marked "16" are out of reach. There is also no existing RL system to measure, so these experiments become stages 1 to 3 of building the testbed (see `STATUS.md`). This plan will be rewritten once `testbed/probe.py` has reported what the machine holds.
+
 ## Purpose
 
 The simulator's absolute numbers rest on about fifteen factors that are currently guesses. This plan measures them on real cards, writes them to `factors.json`, and then checks the simulator's prediction against one real run of each layout.

@@ -108,6 +108,7 @@ Price of lag, scenario A, hours to target:
 
 - The first outline said generation usually dominates. The first model said training is the larger side in compute, about 1:2.2. That ratio came from assumed efficiency factors; with the current defaults generation is about 1.2 times training. The ratio is not known until measured.
 - The scope audit said drift moves the best split. See finding 6.
+- 2026-11-27, aim restated by the user. This document treats "which layout is faster" as the goal. The goal is the model itself: a digital twin that explains where the card-time goes and can be checked against real runs (see `STATUS.md`, Aim). The results table above stays as a set of questions put to the model, not as the deliverable.
 
 ## Scope audit, status
 

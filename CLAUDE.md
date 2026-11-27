@@ -1,6 +1,8 @@
 # RL train/infer placement
 
-Decide how to place RL training and rollout inference on a GPU fleet: share the same cards in time, or split the fleet in space. The tool is a simulator that takes cluster, model and workload and returns, for any deploy policy, the time to target and the policy lag.
+A digital twin of RL training on a GPU fleet, built to understand the trade-off between sharing the same cards in time (rollout inference and training alternate) and splitting the fleet in space. The aim is the model, not a verdict on which layout is fastest: it must explain where the card-time goes and why, and it must be checkable against the output of real runs. The full aim and what it requires are in `STATUS.md`.
+
+The simulator takes cluster, model and workload and returns, for any deploy policy, the time to target and the policy lag.
 
 Moved here from `~/casual/rl-train-infer-placement` on 2026-11-27. The original discussion record stays there.
 
@@ -12,6 +14,7 @@ Moved here from `~/casual/rl-train-infer-placement` on 2026-11-27. The original 
 | `scenarios.py` | Scenarios A to M and the self-tests |
 | `factors.json` | Efficiency and overhead factors. Currently simulator defaults, not measurements |
 | `results.txt` | Output of the last full scenario run |
+| `testbed/` | The real counterpart, built here and run on the cards by the user. So far `probe.py`, which describes the machine |
 | `docs/design-and-findings.md` | Model design, results, findings, corrections, limits |
 | `docs/experiment-plan.md` | Experiments E1 to E9 to measure the factors on real cards |
 | `STATUS.md` | Where the job stands and what is next. Keep it current |
@@ -29,7 +32,9 @@ Needs Python 3 with numpy. `run_many` and `evaluate` use a process pool, so call
 ## Constraints
 
 - This machine has no GPU. Nothing here can be measured locally.
-- The user can run experiments on H800 or H200 cards elsewhere, 8 or 16 at a time, and bring numbers back.
+- No real RL system exists to check the twin against. It is built in this repo under `testbed/`.
+- The user has 8 x H800 for verification. I write the code here; the user runs it there and brings the output back. Each testbed script must therefore run unattended, fail loudly, and write one output file.
+- Code under `testbed/` that touches a card cannot be tested here. Say which paths were tested and which were not.
 - Keep every factor overridable through `factors.json`; do not hard-code measured values in `rlsim.py`.
 - The H800 entry in `CARDS` uses H100 compute numbers as a placeholder. Its specifications are unverified.
 - Default factors come from two published H100 numbers read in search summaries, not verified at source. Treat absolute hours as provisional.
